@@ -45,6 +45,19 @@ variable "image_version" {
   default     = "latest"
 }
 
+variable "ip_manager"{
+  description ="ip allowed to rdp"
+}
+
+variable "bpm_vhd"{
+  description ="storage uri of bpm vhd"
+}
+
+
+variable "sql_vhd"{
+  description ="storage uri of sql vhd"
+}
+
 provider "azurerm" {
   subscription_id = "${var.credential["subscription_id"]}"
   client_id       = "${var.credential["client_id"]}"
@@ -80,7 +93,7 @@ resource "azurerm_network_security_rule" "rdp" {
   protocol                    = "TCP"
   source_port_range           = "*"
   destination_port_range      = "3389"
-  source_address_prefix       = ""
+  source_address_prefix       = "${var.ip_manager}"
   destination_address_prefix  = "*"
   resource_group_name         = "${azurerm_resource_group.test.name}"
   network_security_group_name = "${azurerm_network_security_group.nsg.name}"
@@ -129,7 +142,7 @@ resource "azurerm_image" "image-bpm" {
   os_disk {
     os_type  = "Windows"
     os_state = "Generalized"
-    blob_uri = ""
+    blob_uri = "${var.bpm_vhd}"
   }
 
   depends_on = ["azurerm_resource_group.test"]
@@ -166,14 +179,7 @@ resource "azurerm_virtual_machine" "vm-bpm" {
     managed_disk_type = "Standard_LRS"
   }
 
-  /*storage_data_disk {
-                                                                                                                                                                                                                                                            name            = "${azurerm_managed_disk.diskbpm.name}"
-                                                                                                                                                                                                                                                            managed_disk_id = "${azurerm_managed_disk.diskbpm.id}"
-                                                                                                                                                                                                                                                            create_option   = "Attach"
-                                                                                                                                                                                                                                                            lun             = 1
-                                                                                                                                                                                                                                                            disk_size_gb    = "${azurerm_managed_disk.diskbpm.disk_size_gb}"
-                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                        */
+  
   os_profile {
     computer_name  = "${var.name_group}-bpm-1"
     admin_username = "${var.name_group}"
@@ -217,7 +223,7 @@ resource "azurerm_image" "image-sql" {
   os_disk {
     os_type  = "Windows"
     os_state = "Generalized"
-    blob_uri = ""
+    blob_uri = "${var.sql_vhd}"
   }
 
   depends_on = ["azurerm_resource_group.test"]
@@ -251,14 +257,6 @@ resource "azurerm_virtual_machine" "vm-sql" {
     create_option     = "FromImage"
     managed_disk_type = "Standard_LRS"
   }
-
-  /*storage_data_disk {
-    name            = "${azurerm_managed_disk.disksql.name}"
-    managed_disk_id = "${azurerm_managed_disk.disksql.id}"
-    create_option   = "Attach"
-    lun             = 1
-    disk_size_gb    = "${azurerm_managed_disk.disksql.disk_size_gb}"
-  }*/
 
   os_profile {
     computer_name  = "${var.name_group}-sql-1"
