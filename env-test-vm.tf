@@ -58,6 +58,14 @@ variable "sql_vhd"{
   description ="storage uri of sql vhd"
 }
 
+variable "cli_vhd"{
+  description ="storage uri of cli vhd"
+}
+
+variable "storage_name"{
+  description ="storage new vhd"
+}
+
 provider "azurerm" {
   subscription_id = "${var.credential["subscription_id"]}"
   client_id       = "${var.credential["client_id"]}"
@@ -98,6 +106,19 @@ resource "azurerm_network_security_rule" "rdp" {
   resource_group_name         = "${azurerm_resource_group.test.name}"
   network_security_group_name = "${azurerm_network_security_group.nsg.name}"
 }
+resource "azurerm_network_security_rule" "sql" {
+  name                        = "allow-sql"
+  priority                    = 101
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "1433"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = "${azurerm_resource_group.test.name}"
+  network_security_group_name = "${azurerm_network_security_group.nsg.name}"
+}
 
 resource "azurerm_subnet" "subnet" {
   name                      = "${var.name_group}subnet"
@@ -133,53 +154,24 @@ resource "azurerm_public_ip" "pipbpm" {
   domain_name_label            = "${var.name_group}-bpm-1"
   depends_on                   = ["azurerm_resource_group.test"]
 }
-
-resource "azurerm_image" "image-bpm" {
-  name                = "accimagebpm"
-  location            = "eastus"
-  resource_group_name = "${var.name_group}"
-
-  os_disk {
-    os_type  = "Windows"
-    os_state = "Generalized"
-    blob_uri = "${var.bpm_vhd}"
-  }
-
-  depends_on = ["azurerm_resource_group.test"]
-}
-
-resource "azurerm_managed_disk" "diskbpm" {
-  name                 = "datadisk_existingbpm"
-  location             = "${azurerm_resource_group.test.location}"
-  resource_group_name  = "${azurerm_resource_group.test.name}"
-  storage_account_type = "Standard_LRS"
-  create_option        = "Empty"
-  disk_size_gb         = "1023"
-  depends_on           = ["azurerm_resource_group.test"]
-}
-
 resource "azurerm_virtual_machine" "vm-bpm" {
   name                = "${var.name_group}-bpm-1"
   location            = "${var.location}"
   resource_group_name = "${var.name_group}"
   vm_size             = "${var.vm_size}"
 
-  delete_os_disk_on_termination    = false
-  delete_data_disks_on_termination = false
+  delete_os_disk_on_termination    = true
   network_interface_ids            = ["${azurerm_network_interface.nicbpm.id}"]
 
-  storage_image_reference {
-    id = "${azurerm_image.image-bpm.id}"
-  }
-
   storage_os_disk {
-    name              = "${var.name_group}bpmosdisk"
-    caching           = "ReadWrite"
-    create_option     = "FromImage"
-    managed_disk_type = "Standard_LRS"
+    name          = "${var.name_group}bpmosdisk1"
+    image_uri     = "${var.bpm_vhd}"
+    vhd_uri       = "https://${var.storage_name}.blob.core.windows.net/vhdtemplate/${var.name_group}-bpm-1osdisk.vhd"
+    os_type       = "Windows"
+    caching       = "ReadWrite"
+    create_option = "FromImage"
   }
 
-  
   os_profile {
     computer_name  = "${var.name_group}-bpm-1"
     admin_username = "${var.name_group}"
@@ -187,7 +179,8 @@ resource "azurerm_virtual_machine" "vm-bpm" {
   }
 
   os_profile_windows_config = {}
-  depends_on                = ["azurerm_managed_disk.diskbpm"]
+
+  depends_on                = ["azurerm_resource_group.test"]
 }
 
 resource "azurerm_network_interface" "nicsql" {
@@ -215,47 +208,23 @@ resource "azurerm_public_ip" "pipsql" {
   depends_on                   = ["azurerm_resource_group.test"]
 }
 
-resource "azurerm_image" "image-sql" {
-  name                = "accimagesql"
-  location            = "eastus"
-  resource_group_name = "${var.name_group}"
 
-  os_disk {
-    os_type  = "Windows"
-    os_state = "Generalized"
-    blob_uri = "${var.sql_vhd}"
-  }
-
-  depends_on = ["azurerm_resource_group.test"]
-}
-
-resource "azurerm_managed_disk" "disksql" {
-  name                 = "datadisk_existingsql"
-  location             = "${azurerm_resource_group.test.location}"
-  resource_group_name  = "${azurerm_resource_group.test.name}"
-  storage_account_type = "Standard_LRS"
-  create_option        = "Empty"
-  disk_size_gb         = "1023"
-  depends_on           = ["azurerm_resource_group.test"]
-}
 
 resource "azurerm_virtual_machine" "vm-sql" {
   name                = "${var.name_group}-sql-1"
   location            = "${var.location}"
   resource_group_name = "${var.name_group}"
   vm_size             = "${var.vm_size}"
-
+  delete_os_disk_on_termination    = true
   network_interface_ids = ["${azurerm_network_interface.nicsql.id}"]
 
-  storage_image_reference {
-    id = "${azurerm_image.image-sql.id}"
-  }
-
   storage_os_disk {
-    name              = "${var.name_group}sqlosdisk"
-    caching           = "ReadWrite"
-    create_option     = "FromImage"
-    managed_disk_type = "Standard_LRS"
+    name          = "${var.name_group}sqlosdisk1"
+    image_uri     = "${var.sql_vhd}"
+    vhd_uri       = "https://${var.storage_name}.blob.core.windows.net/vhdtemplate/${var.name_group}-sql-1osdisk.vhd"
+    os_type       = "Windows"
+    caching       = "ReadWrite"
+    create_option = "FromImage"
   }
 
   os_profile {
@@ -264,5 +233,58 @@ resource "azurerm_virtual_machine" "vm-sql" {
     admin_password = "${var.name_group}sql1Psw"
   }
   os_profile_windows_config = {}
-  depends_on                = ["azurerm_managed_disk.disksql"]
+  depends_on                = ["azurerm_resource_group.test"]
+}
+
+resource "azurerm_network_interface" "niccli" {
+  name                      = "${var.name_group}clinic"
+  location                  = "${var.location}"
+  resource_group_name       = "${var.name_group}"
+  network_security_group_id = "${azurerm_network_security_group.nsg.id}"
+
+  ip_configuration {
+    name                          = "${var.name_group}ipcliconfig"
+    subnet_id                     = "${azurerm_subnet.subnet.id}"
+    private_ip_address_allocation = "dynamic"
+    public_ip_address_id          = "${azurerm_public_ip.pipcli.id}"
+  }
+
+  depends_on = ["azurerm_network_security_group.nsg"]
+}
+
+resource "azurerm_public_ip" "pipcli" {
+  name                         = "${var.name_group}cli-ip"
+  location                     = "${var.location}"
+  resource_group_name          = "${var.name_group}"
+  public_ip_address_allocation = "static"
+  domain_name_label            = "${var.name_group}-cli-1"
+  depends_on                   = ["azurerm_resource_group.test"]
+}
+
+
+
+resource "azurerm_virtual_machine" "vm-cli" {
+  name                = "${var.name_group}-cli-1"
+  location            = "${var.location}"
+  resource_group_name = "${var.name_group}"
+  vm_size             = "${var.vm_size}"
+  delete_os_disk_on_termination    = true
+  network_interface_ids = ["${azurerm_network_interface.niccli.id}"]
+
+  storage_os_disk {
+    name          = "${var.name_group}cliosdisk1"
+    image_uri     = "${var.cli_vhd}"
+    vhd_uri       = "https://${var.storage_name}.blob.core.windows.net/vhdtemplate/${var.name_group}-cli-1osdisk.vhd"
+    os_type       = "Windows"
+    caching       = "ReadWrite"
+    create_option = "FromImage"
+  }
+
+  os_profile {
+    computer_name  = "${var.name_group}-cli-1"
+    admin_username = "${var.name_group}"
+    admin_password = "${var.name_group}cli1Psw"
+  }
+  os_profile_windows_config = {}
+  depends_on                = ["azurerm_resource_group.test"]
 }
