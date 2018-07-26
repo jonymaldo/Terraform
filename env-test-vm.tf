@@ -120,6 +120,21 @@ resource "azurerm_network_security_rule" "sql" {
   network_security_group_name = "${azurerm_network_security_group.nsg.name}"
 }
 
+resource "azurerm_network_security_rule" "winrm" {
+  name                        = "winrm"
+  priority                    = 102
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5985"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = "${var.name_group}"
+  network_security_group_name = "${azurerm_network_security_group.nsg.name}"
+}
+
+
 resource "azurerm_subnet" "subnet" {
   name                      = "${var.name_group}subnet"
   virtual_network_name      = "${azurerm_virtual_network.vnet.name}"
@@ -178,11 +193,27 @@ resource "azurerm_virtual_machine" "vm-bpm" {
     admin_password = "${var.name_group}bpm1Psw"
   }
 
-  os_profile_windows_config = {}
-
+  os_profile_windows_config = {
+    provision_vm_agent = true
+    winrm {
+      protocol = "http"
+    }
+  }
+/*
+  provisioner "file" {
+    source      = "S:/dv/RNF/Terraform/UpdateBPM.ps1"
+    destination = "C:/UpdateBPM.ps1"
+  
+    connection {
+      type     = "winrm"
+      user     = "${var.name_group}"
+      password = "${var.name_group}bpm1Psw"
+      host     = "${azurerm_public_ip.pipbpm.ip_address}"
+    }
+  }*/
   depends_on                = ["azurerm_resource_group.test"]
 }
-
+/*
 resource "azurerm_network_interface" "nicsql" {
   name                      = "${var.name_group}sqlnic"
   location                  = "${var.location}"
@@ -287,4 +318,54 @@ resource "azurerm_virtual_machine" "vm-cli" {
   }
   os_profile_windows_config = {}
   depends_on                = ["azurerm_resource_group.test"]
+
+ 
+}*/
+resource "azurerm_storage_account" "st" {
+    name = "staccountst"
+    resource_group_name = "${var.name_group}"
+    location = "${var.location}"
+    account_tier = "Standard"
+    account_replication_type = "LRS"
+    depends_on                = ["azurerm_resource_group.test"]
+}
+
+resource "azurerm_storage_container" "st" {
+    name = "scriptsst"
+    resource_group_name = "${var.name_group}"
+    storage_account_name = "${azurerm_storage_account.st.name}"
+    container_access_type = "blob"
+}
+
+resource "azurerm_storage_blob" "st" {
+    name = "UpdateBPM.ps1"
+    resource_group_name = "${var.name_group}"
+    storage_account_name = "${azurerm_storage_account.st.name}"
+    storage_container_name = "${azurerm_storage_container.st.name}"
+    type = "block"
+    source = "UpdateBPM.ps1"
+}
+
+
+resource "azurerm_virtual_machine_extension" "bpmext" {
+  name                 = "${var.name_group}-bpm-1"
+  location             = "${var.location}"
+  resource_group_name  = "${var.name_group}"
+  virtual_machine_name = "${azurerm_virtual_machine.vm-bpm.name}"
+  /*publisher            = "Microsoft.Azure.Extensions"
+  type                 = "CustomScript"
+  type_handler_version = "2.0"
+*/ publisher = "Microsoft.Compute"
+    type = "CustomScriptExtension"
+type_handler_version = "1.9"
+  settings = <<SETTINGS
+    {
+      "fileUris": [
+                "${azurerm_storage_blob.st.url}"
+      ],
+      "commandToExecute": "powershell.exe -ExecutionPolicy Unrestricted -File UpdateBPM.ps1"
+    }
+    SETTINGS
+
+  depends_on =["azurerm_virtual_machine.vm-bpm"]
 }
