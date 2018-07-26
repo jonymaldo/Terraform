@@ -8,7 +8,7 @@ variable "name_group" {
 
 variable "location" {
   description = "region where the resources should exist"
-  default     = "eastus"
+  default     = "st"
 }
 
 variable "vm_size" {
@@ -352,12 +352,9 @@ resource "azurerm_virtual_machine_extension" "bpmext" {
   location             = "${var.location}"
   resource_group_name  = "${var.name_group}"
   virtual_machine_name = "${azurerm_virtual_machine.vm-bpm.name}"
-  /*publisher            = "Microsoft.Azure.Extensions"
+  publisher            = "Microsoft.Azure.Extensions"
   type                 = "CustomScript"
   type_handler_version = "2.0"
-*/ publisher = "Microsoft.Compute"
-    type = "CustomScriptExtension"
-type_handler_version = "1.9"
   settings = <<SETTINGS
     {
       "fileUris": [
