@@ -8,7 +8,7 @@ variable "name_group" {
 
 variable "location" {
   description = "region where the resources should exist"
-  default     = "st"
+  default     = "eastus"
 }
 
 variable "vm_size" {
